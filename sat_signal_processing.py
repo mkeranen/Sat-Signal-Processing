@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Oct 19 14:48:47 2017
+Created on Thu Nov 16 15:48:47 2017
 
 @author: mkeranen
+
+This script analyzes and processes the reflected light intensity signal 
+obtained using an LED and blood.
+
 """
 
 import matplotlib.pyplot as plt
@@ -24,7 +28,6 @@ for cell in data:
 #frequency in samples/second
 samplingFrequency = 10000
 timeStep = 1.0 / samplingFrequency
-
 numSamples = len(dataList)
 
 #Segment out portions of signal, eliminate first and last percentile to 
@@ -34,7 +37,7 @@ segment2 = dataList[int(numSamples * 0.26) : int(numSamples * 0.49)]
 segment3 = dataList[int(numSamples * 0.51) : int(numSamples * 0.74)]
 segment4 = dataList[int(numSamples * 0.76) : int(numSamples * 0.99)]
 
-#Make segments length a power of 2
+#Make segments length a power of 2 for DFT / FFT algorithm
 segment1 = segment1[:-(len(segment1)-8192)]
 segment2 = segment2[:-(len(segment2)-8192)]
 segment3 = segment3[:-(len(segment3)-8192)]
@@ -43,7 +46,7 @@ segment4 = segment4[:-(len(segment4)-8192)]
 #Create time step list
 timeSegment = np.arange(0,len(segment1)/10000,timeStep)
 
-#Discrete Fourier Transform for all segments using FFT
+#Discrete Fourier Transform for all segments
 s1FFT = np.fft.fft(segment1)
 s1FFTmag = np.absolute(s1FFT)
 s1FFTfreq = np.fft.fftfreq(len(segment1), d=timeStep)
@@ -60,10 +63,17 @@ s4FFT = np.fft.fft(segment4)
 s4FFTmag = np.absolute(s4FFT)
 s4FFTfreq = np.fft.fftfreq(len(segment4), d=timeStep)
 
-#Butterworth low pass filter
-N = 2       #filter order
-Wn = .01   #Cutoff frequency
+#Second order butterworth filter
+N = 2       
+cutoffFrequency = 100 #Hz
+Wn = (2/samplingFrequency)*cutoffFrequency
 b, a = signal.butter(N, Wn)
+
+#Compute the frequency response of a digital filter
+w, h = signal.freqz(b, a)
+
+#Convert units from radians/sample to Hz
+w = (w * samplingFrequency)/(2*3.14159)
 
 #Implementation of butterworth filter
 filteredSegment1 = signal.filtfilt(b, a, segment1)
@@ -93,26 +103,44 @@ plt.tight_layout()
 fig.subplots_adjust(top=0.85)
 fig.savefig('Raw Sat Signals.pdf', bbox_inches='tight')
 
-#FFT results
+#FFT results: Plot FFT Frequency vs Magnitude, up to Nyquist Frequency (Fs/2)
 fig, ax = plt.subplots(4,1, sharex=True)
 fig.suptitle('Sat Signal FFT', fontweight='bold')
 plt.xlabel('Frequency [Hz]')
 
 ax[0].plot(s1FFTfreq[1:int(len(s1FFTfreq)/2)], s1FFTmag[1:int(len(s1FFTfreq)/2)], 'b-', linewidth = 0.5)
+ax[0].plot([cutoffFrequency,cutoffFrequency],[0,max(s1FFTmag[1:int(len(s1FFTfreq)/2)])],'y-', linewidth = 1)
 ax[0].set_title('FFT Segment 1')
 
 ax[1].plot(s1FFTfreq[1:int(len(s2FFTfreq)/2)], s2FFTmag[1:int(len(s2FFTfreq)/2)], 'g-', linewidth = 0.5)
+ax[1].plot([cutoffFrequency,cutoffFrequency],[0,max(s2FFTmag[1:int(len(s2FFTfreq)/2)])],'y-', linewidth = 1)
 ax[1].set_title('FFT Segment 2')
 
 ax[2].plot(s1FFTfreq[1:int(len(s3FFTfreq)/2)], s3FFTmag[1:int(len(s3FFTfreq)/2)], 'r-', linewidth = 0.5)
+ax[2].plot([cutoffFrequency,cutoffFrequency],[0,max(s3FFTmag[1:int(len(s3FFTfreq)/2)])],'y-', linewidth = 1)
 ax[2].set_title('FFT Segment 3')
 
 ax[3].plot(s1FFTfreq[1:int(len(s4FFTfreq)/2)], s4FFTmag[1:int(len(s4FFTfreq)/2)], 'k-', linewidth = 0.5)
+ax[3].plot([cutoffFrequency,cutoffFrequency],[0,max(s4FFTmag[1:int(len(s4FFTfreq)/2)])],'y-', linewidth = 1)
 ax[3].set_title('FFT Segment 4')
 
 plt.tight_layout()
 fig.subplots_adjust(top=0.85)
 fig.savefig('Sat Signal FFT.pdf', bbox_inches='tight')
+
+#Plot Filter Frequency Response
+fig, ax = plt.subplots(1,1)
+ax.plot(w, 20 * np.log10(abs(h)),'b-')
+plt.xscale('log')
+plt.title('Butterworth Filter Frequency Response', fontweight='bold')
+plt.xlabel('Frequency [Hz]')
+plt.ylabel('Amplitude [dB]')
+plt.margins(0, 0.1)
+plt.grid(which='both', axis='both')
+plt.axvline(cutoffFrequency, color='green') # cutoff frequency
+plt.ylim(-80,5)
+plt.tight_layout()
+plt.savefig('Filter Frequency Response.pdf', bbox_inches='tight')
 
 #Filtered signals overlaid on raw signals
 fig, ax = plt.subplots(4,1, sharex=True)
