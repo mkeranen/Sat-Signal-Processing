@@ -7,6 +7,8 @@ Created on Thu Nov 16 15:48:47 2017
 This script analyzes and processes the reflected light intensity signal 
 obtained using an LED and blood.
 
+TODO: Modularize and clean up code...
+
 """
 
 import matplotlib.pyplot as plt
